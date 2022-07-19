@@ -3,6 +3,8 @@ import datetime
 
 
 # --------------------------------------клавиатура "да нет"------------------------------------------------
+from tgbot.data_base import sqlite_db
+
 byes = KeyboardButton('да')
 bno = KeyboardButton('нет')
 # замена клавы обычной на клаву созданную
@@ -21,16 +23,37 @@ kb_equipment.add(bsup).add(bbaydarka).add(bkanoe)
 # ---------------------------------------------------------------------------------------------------------
 
 # --------------------------------------клавиатура с кол-вом оборудования----------------------------------
-available_quantity = ["1", "2", "3", "4", '5', "6", "7", "8", "9", "10"]
+async def quantity_equipment(date, hour, boat):
+    # расчет свободного кол-ва оборудования на час будет происходить в программе
+    # когда пользователь выбирает дату и время брони прога делает запрос в котором чекает оборудование на час и возвращает число
+    # todo для этого бот сначала спрашивает про дату, а потом уже про кол-во
 
-kb_quantity_equipment = ReplyKeyboardMarkup(resize_keyboard=True)
-for value in available_quantity:
-    kb_quantity_equipment.add(value)
+
+    # todo если пустой запрос то соунт = 0)
+    read = await sqlite_db.sql_read_for_time(date, hour)
+    print('read', read)
+    count = 0
+    for ret in read:
+        if boat == 'sup-доска':
+            count = int(ret[1].split('|')[0])
+        elif boat == 'байдарка':
+            count = int(ret[1].split('|')[1])
+        elif boat == 'каноэ':
+            count = int(ret[1].split('|')[2])
+
+    # уменьшаемое - переменная значение которой надо записать где-то не тут
+    quantity = 10 - count
+    available_quantity = [str(i) for i in range(1, quantity + 1)]
+
+    kb_quantity_equipment = ReplyKeyboardMarkup(resize_keyboard=True)
+    for value in available_quantity:
+        kb_quantity_equipment.add(value)
+    return kb_quantity_equipment
 # ---------------------------------------------------------------------------------------------------------
 
 # --------------------------------------клавиатура с датами------------------------------------------------
-months = {1: 'Января', 2: 'Ферваля', 3: 'Марта', 4: 'Апреля', 5: 'Мая', 6: 'Июня', 7: 'Июля', 8: 'Августа',
-          9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'}
+months = {1: 'января', 2: 'ферваля', 3: 'марта', 4: 'апреля', 5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
+          9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'}
 global date_for_buttons
 date_for_buttons = []
 kb_dates = ReplyKeyboardMarkup(resize_keyboard=True)
