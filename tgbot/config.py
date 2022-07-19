@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 
+# for Python version < 3.9
+# from typing import List
+
 from environs import Env
 
 
@@ -14,7 +17,8 @@ class DbConfig:
 @dataclass
 class TgBot:
     token: str
-    admin_ids: list[int]
+    admin_ids: list[int] # for Python version >= 3.9
+    # admin_ids: list # for Python version < 3.9 write "List(int)"
     # use_redis: bool
 
 
