@@ -1,38 +1,67 @@
-from aiogram import Bot, Dispatcher, types
+from aiogram import Dispatcher, types
 from aiogram.dispatcher import FSMContext
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, InputFile
 
-# TODO потом убрать !!!
 from tgbot.config import load_config
-from tgbot.keyboards.reply import quantity_equipment
+
+from tgbot.keyboards.reply import quantity_equipment, equipment
 
 from tgbot.states.OrderBooking import OrderBooking
-from tgbot.keyboards import kb_yes_no, kb_equipment, kb_dates, kb_hours
+# todo импортнуть как в 6 строке
+from tgbot.keyboards import kb_yes_no, kb_dates, kb_hours
 from tgbot.data_base import sqlite_db
+from tgbot.config import load_config
 
-
-# TODO потом убрать !!!
-config = load_config(".env")
 
 
 class BOOKING:
     have = False
 
 
+async def get_str_equipments(ret):
+    config = load_config(".env")
+    num_boat_dict = {}
+    for i, boat in enumerate(config.equipments.equipment):
+        num_boat_dict[f'{i}'] = boat
+    quantity_dict = {}
+    for i, item in enumerate(ret):
+        if 0 <= i < 7 and item != '0':
+            quantity_dict[f'{num_boat_dict[f"{i}"]}'] = item
+    str = ''
+    for key in quantity_dict:
+        str += f'{key}: {quantity_dict[key]}\n'
+    return str
+
 async def user_booking(message: Message):
-    print('qq')
     read = await sqlite_db.sql_read_for_user(message.from_user.id)
     if read:
+        # num_boat_dict = {
+        #     '0': 'sup доска',
+        #     '1': 'байдарка',
+        #     '2': 'каноэ',
+        #     '3': 'каяк',
+        #     '4': 'мегасап',
+        #     '5': 'катамаран',
+        #     '6': 'распашная лодка',
+        # }
+        # quantity_dict = {}
+        # for i, item in enumerate(read[0]):
+        #     if 0 <= i < 7 and item != '0':
+        #         quantity_dict[f'{num_boat_dict[f"{i}"]}'] = item
+        # str = ''
+        # for key in quantity_dict:
+        #     str += f'{key}: {quantity_dict[key]}\n'
+
         for ret in read:
-            await message.answer(f'{ret[6]}\n'
-                                 f'Дата: {ret[2]}\n'
-                                 f'Время: {ret[3]}\n'
-                                 f'sup-доски: {ret[1].split("|")[0]}\n'
-                                 f'байдарки: {ret[1].split("|")[1]}\n'
-                                 f'каноэ: {ret[1].split("|")[2]}\n',
+            str_equipments = await get_str_equipments(ret)
+            await message.answer(f'{ret[11]}\n'
+                                 f'Дата: {ret[7]}\n'
+                                 f'Время: {ret[8]}\n'
+                                 f'Оборудование:\n'
+                                 f'{str_equipments}',
                                  reply_markup=types.ReplyKeyboardRemove())
             await message.answer('⬆⬆⬆⬆', reply_markup=InlineKeyboardMarkup().
-                                 add(InlineKeyboardButton(f'Удалить бронь', callback_data=f'del {ret[4]}')))
+                                 add(InlineKeyboardButton(f'Удалить бронь', callback_data=f'del {ret[9]}')))
     else:
         await message.answer('У вас нет броней!\nСоздать бронь /booking', reply_markup=InlineKeyboardMarkup())
 
@@ -42,9 +71,9 @@ async def del_callback_run_user(callback_query: types.CallbackQuery):
     await callback_query.answer(text='Запись удалена', show_alert=True)
 
 
-async def user_start(message: Message):
-    await message.answer("Помочь забронировать лодку?",
-                         reply_markup=kb_yes_no)
+async def user_start(message: Message, state: FSMContext):
+    await state.finish()
+    await message.answer("Помочь забронировать лодку?", reply_markup=kb_yes_no)
     await OrderBooking.waiting_for_start.set()
 
 
@@ -56,11 +85,10 @@ async def start_value_chosen(message: Message, state: FSMContext):
     if message.text.lower() not in ValueKB_yes_no:
         await message.answer('Пожалуйста, выберите "Да" или "Нет", используя клавиатуру ниже.')
         return
-    await state.update_data(user_start=message.text.lower())
+    # await state.update_data(user_start=message.text.lower())
     if message.text.lower() == 'да':
         # идем в базу и узнаем есть ли там запись для userid
         read = await sqlite_db.sql_read_for_user(message.from_user.id)
-        print('read', read)
         # если бронь есть спрашиваем о перезаписи
         if read:
             BOOKING.have = True
@@ -69,8 +97,6 @@ async def start_value_chosen(message: Message, state: FSMContext):
                 "Вы уже создавали бронь!\nЕсли хотите создать новую, мы перезапишем вашу бронь!\nВы согласны?",
                 reply_markup=kb_yes_no)
             return
-        print('BOOKING.have', BOOKING.have)
-        print('я всетаки зашел сюда')
         await OrderBooking.next()
         await message.answer("Выберите дату:", reply_markup=kb_dates)
     elif message.text.lower() == 'нет':
@@ -91,7 +117,7 @@ async def end_of_date(message: Message, state: FSMContext):
         if message.text not in ValueKB_dates:
             await message.answer("Пожалуйста, выберите дату, используя клавиатуру ниже.")
             return
-        await state.update_data(date=message.text.lower())
+        await state.update_data(weekday=message.text.split(', ')[0], date=message.text.split(', ')[1])
         await OrderBooking.next()
         await message.answer("Выберите время бронирования", reply_markup=kb_hours)
     elif BOOKING.have:
@@ -127,8 +153,9 @@ async def end_of_hour(message: Message, state: FSMContext):
     if message.text.lower() not in ValueKB_hours:
         await message.answer("Пожалуйста, выберите время, используя клавиатуру ниже.")
         return
+    user_data = await state.get_data()
+    kb_equipment = await equipment(user_data['date'])
     await state.update_data(hour=message.text.lower())
-
     await OrderBooking.next()
     await message.answer(f"Выбери оборудование", reply_markup=kb_equipment)
 
@@ -136,6 +163,8 @@ async def end_of_hour(message: Message, state: FSMContext):
 async def boat_chosen(message: Message, state: FSMContext):
     # if not BOOKING.have:
     # конструкция для получения значений кнопок
+    user_data = await state.get_data()
+    kb_equipment = await equipment(user_data['date'])
     ValueKB_equipment = []
     for button in kb_equipment.keyboard:
         ValueKB_equipment.append(button[0]['text'])
@@ -143,43 +172,15 @@ async def boat_chosen(message: Message, state: FSMContext):
         await message.answer("Пожалуйста, выберите оборудование, используя клавиатуру ниже.")
         return
     await state.update_data(boat=message.text.lower())
+    # todo не нужно ли это запихнуть в иначе?
     await OrderBooking.next()
-    # тут вызываю функцию и отдаю в нее НАЗВАНИЕ ЛОДКИ и ДАТУ и ВРЕМЯ. Функция вернет клавиатуру с кол-вом оборудования
-
-
     user_data = await state.get_data()
-
-    # read = await sqlite_db.sql_read_for_time(user_data['date'], user_data['hour'])
     kb_quantity_equipment = await quantity_equipment(user_data['date'], user_data['hour'], user_data['boat'])
-
-
-
-
-    await message.answer("Выберите количество оборудования:", reply_markup=kb_quantity_equipment)
-
-    # elif BOOKING.have:
-    #     # конструкция для получения значений кнопок
-    #     ValueKB_yes_no = []
-    #     for button in kb_yes_no.keyboard:
-    #         ValueKB_yes_no.append(button[0]['text'])
-    #     if message.text.lower() not in ValueKB_yes_no:
-    #         await message.answer('Пожалуйста, выберите "Да" или "Нет", используя клавиатуру ниже.')
-    #         return
-    #     if message.text.lower() == 'да':
-    #         await sqlite_db.sql_delete_command_for_user(message.from_user.id)
-    #         # сброс глобальной переменной
-    #         BOOKING.have = False
-    #         await message.answer('Ваша запись успешно удалена!')
-    #         await OrderBooking.waiting_for_boat_name.set()
-    #         await message.answer("Выберите оборудование:", reply_markup=kb_equipment)
-    #     elif message.text.lower() == 'нет':
-    #         await message.answer("Ждем вас по вашей записи!", reply_markup=types.ReplyKeyboardRemove())
-    #         keyboard = types.InlineKeyboardMarkup(row_width=1)
-    #         keyboard.add(types.InlineKeyboardButton(text="blackcoffee76.ru", url="https://blackcoffee76.ru/"))
-    #         await message.answer("Наш телефон: +74852609002", reply_markup=keyboard)
-    #         await message.answer_location(latitude=57.541343, longitude=40.117726)
-    #         await message.answer("Просмотерть свои записи /mybooking")
-    #         await state.finish()
+    if not kb_quantity_equipment.keyboard:
+        await message.answer("На это время нет доступного оборудования, попробуйте выбрать другое время", reply_markup=kb_hours)
+        await OrderBooking.waiting_for_hour.set()
+    else:
+        await message.answer("Выберите количество оборудования:", reply_markup=kb_quantity_equipment)
 
 
 async def end_of_booking(message: Message, state: FSMContext):
@@ -190,38 +191,30 @@ async def end_of_booking(message: Message, state: FSMContext):
     for button in kb_quantity_equipment.keyboard:
         print(button)
         ValueKB_quantity_equipment.append(button[0])
-    print('ValueKB_quantity_equipment', ValueKB_quantity_equipment)
     if message.text.lower() not in ValueKB_quantity_equipment:
         await message.answer("Пожалуйста, выберите количество оборудования, используя клавиатуру ниже.")
         return
     user_data = await state.get_data()
-    # для вноса инфы о всех лодках и количествах
-    try:
-        if user_data['boats']:
-            boats_list = user_data['boats'].split('|')
-        else:
-            boats_list = ['0', '0', '0']
-            print('есть')
-    except:
-        boats_list = ['0', '0', '0']
-    if user_data['boat'] == 'sup-доска':
-        boats_list[0] = message.text.lower()
+    # todo в одну строку
+    if user_data['boat'] == 'sup доска':
+        await state.update_data(sap_board=message.text.lower())
     elif user_data['boat'] == 'байдарка':
-        boats_list[1] = message.text.lower()
+        await state.update_data(baydarka=message.text.lower())
     elif user_data['boat'] == 'каноэ':
-        boats_list[2] = message.text.lower()
-    boats = '|'.join(boats_list)
-    print('boats', boats)
-    await state.update_data(quantity=message.text.lower())
-    await state.update_data(boats=boats)
-    user_data = await state.get_data()
-    print(user_data['boats'])
-
+        await state.update_data(canoe=message.text.lower())
+    elif user_data['boat'] == 'каяк':
+        await state.update_data(kayak=message.text.lower())
+    elif user_data['boat'] == 'мега sup':
+        await state.update_data(mega_sap_board=message.text.lower())
+    elif user_data['boat'] == 'катамаран':
+        await state.update_data(catamaran=message.text.lower())
+    elif user_data['boat'] == 'распашная лодка':
+        await state.update_data(rowing_boat=message.text.lower())
     # Для последовательных шагов можно не указывать название состояния, обходясь next()
     await OrderBooking.next()
     await message.answer("Желаете забронировать что-нибудь еще?", reply_markup=kb_yes_no)
 
-# меняется
+
 async def anything_else(message: Message, state: FSMContext):
     # конструкция для получения значений кнопок
     ValueKB_yes_no = []
@@ -233,6 +226,8 @@ async def anything_else(message: Message, state: FSMContext):
     if message.text.lower() == 'да':
         # идем повторно по выбору оборудования
         await OrderBooking.waiting_for_boat_name.set()
+        user_data = await state.get_data()
+        kb_equipment = await equipment(user_data['date'])
         await message.answer("Выберите оборудование:", reply_markup=kb_equipment)
     elif message.text.lower() == 'нет':
 
@@ -241,14 +236,6 @@ async def anything_else(message: Message, state: FSMContext):
 
         user_data = await state.get_data()
         await OrderBooking.next()
-        await message.answer(f"Ваша бронь\n"
-                             f"Дата: {user_data['date']}\n"
-                             f"Время: {user_data['hour']}\n"
-                             f"sup-доски: {user_data['boats'].split('|')[0]}\n"
-                             f"байдарки: {user_data['boats'].split('|')[1]}\n"
-                             f"каноэ: {user_data['boats'].split('|')[2]}\n"
-                             )
-
         # выходим из "да нет"
         await OrderBooking.post_end_booking.set()
         await message.answer(f"К вам можно обращаться как к {message.from_user.first_name}?\nИли введите своё имя сами",
@@ -274,23 +261,9 @@ async def get_user_name(message: Message, state: FSMContext):
 
 async def get_user_phone(message: types.Contact, state: FSMContext):
     await state.update_data(userphone=message.contact["phone_number"])
-    user_data = await state.get_data()
-    print('user_data', user_data)
-    await Bot(token=config.tg_bot.token, parse_mode='HTML').send_sticker(chat_id=message.from_user.id,
-                           sticker="CAACAgIAAxkBAAEEsD5ieSxEe3mVhao5gEoMb8biHpj-gQAChQIAAladvQqjCXIQX5cmGSQE")
+    await message.reply_sticker(sticker="CAACAgIAAxkBAAEEsD5ieSxEe3mVhao5gEoMb8biHpj-gQAChQIAAladvQqjCXIQX5cmGSQE")
     await message.answer("Спасибо! С Вами свяжутся в ближайшее время.", reply_markup=types.ReplyKeyboardRemove())
     await message.answer("Для просмотра своих броней используйте команду /mybooking")
-
-    for admin in load_config(".env").tg_bot.admin_ids:
-        await Bot(token=load_config(".env").tg_bot.token, parse_mode='HTML').send_message(admin,#admin
-                                                                                          f'{user_data["first_name"]} зарегистрировался!\n'
-                                                                                          f'Юзернейм: @{user_data["username"]}\n'
-                                                                                          f'Телефон: {user_data["userphone"]}\n'
-                                                                                          f'sup-доски: {user_data["boats"].split("|")[0]}\n'
-                                                                                          f'байдарки: {user_data["boats"].split("|")[1]}\n'
-                                                                                          f'каноэ: {user_data["boats"].split("|")[2]}\n'
-                                                                                          f'Дата: {user_data["date"]}\n'
-                                                                                          f'Время: {user_data["hour"]}\n')
     await sqlite_db.sql_add_command(state)
     await state.finish()
 

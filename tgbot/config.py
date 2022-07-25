@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 
+from environs import Env
+
+
 # for Python version < 3.9
 # from typing import List
-
-from environs import Env
 
 
 @dataclass
@@ -23,9 +24,17 @@ class TgBot:
 
 
 @dataclass
+class EquipmentsConfig:
+    equipment: dict
+    equipment_db: list[str]
+    # quantity: list[int]
+
+
+@dataclass
 class Config:
     tg_bot: TgBot
     db: DbConfig
+    equipments: EquipmentsConfig
 
 
 def load_config(path: str = None):
@@ -43,5 +52,9 @@ def load_config(path: str = None):
             password=env.str('DB_PASS'),
             user=env.str('DB_USER'),
             database=env.str('DB_NAME')
+        ),
+        equipments=EquipmentsConfig(
+            equipment=dict(zip(env.list("EQUIPMENTS"), env.list("QUANTITY"))),
+            equipment_db=list(map(str, env.list("EQUIPMENTS_DB"))),
         ),
     )

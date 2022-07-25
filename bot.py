@@ -11,6 +11,7 @@ from tgbot.handlers.admin import register_admin
 from tgbot.handlers.common import register_common
 from tgbot.handlers.echo import register_echo
 from tgbot.handlers.user import register_user
+from tgbot.utils.notify_admins import on_startup_notify
 # from tgbot.middlewares.db import DbMiddleware
 from tgbot.utils.set_bot_commands import set_default_commands
 from tgbot.data_base import sqlite_db
@@ -35,8 +36,6 @@ def register_all_handlers(dp):
     register_echo(dp)
 
 
-
-
 async def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -58,8 +57,7 @@ async def main():
     register_all_filters(dp)
     register_all_handlers(dp)
 
-    # from utils.notify_admins import on_startup_notify
-    # await on_startup_notify(dp)
+    await on_startup_notify(dp)
     await set_default_commands(dp)
 
     # start

@@ -1,36 +1,39 @@
 from aiogram import Dispatcher, types, Bot
+from aiogram.dispatcher import FSMContext
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+
+from tgbot.config import load_config
 from tgbot.data_base import sqlite_db
+
+from tgbot.handlers.user import get_str_equipments
+from tgbot.keyboards import kb_dates, kb_hours
+
 import xlwt
 
-from tgbot.keyboards import kb_dates, kb_hours, kb_equipment
 
 
-# from tgbot.keyboards import kb_dates
-
-
-async def admin_start(message: Message):
+async def admin_start(message: Message, state: FSMContext):
+    await state.finish()
     await message.reply("Привет, админ!\n"
                         "/bookings- просмотр броней\n"
                         "/report- создание отчета", reply_markup=types.ReplyKeyboardRemove())
 
 
 async def admin_booking(message: Message):
-    print('qq')
     read = await sqlite_db.sql_read_all_for_admin()
     if read:
         for ret in read:
-            await message.answer(f'{ret[6]}\n'
-                                 f'Юзернейм: @{ret[5]}\n'
-                                 f'Телефон: {ret[7]}\n'
-                                 f'Дата: {ret[2]}\n'
-                                 f'Время: {ret[3]}\n'
-                                 f'sup-доски: {ret[1].split("|")[0]}\n'
-                                 f'байдарки: {ret[1].split("|")[1]}\n'
-                                 f'каноэ: {ret[1].split("|")[2]}\n'
+            str_equipments = await get_str_equipments(ret)
+            await message.answer(f'{ret[11]}\n'
+                                 f'Юзернейм: @{ret[10]}\n'
+                                 f'Телефон: {ret[12]}\n'
+                                 f'Дата: {ret[8]}\n'
+                                 f'Время: {ret[9]}\n'
+                                 f'Оборудование:\n'
+                                 f'{str_equipments}'
                                  )
             await message.answer('⬆⬆⬆⬆', reply_markup=InlineKeyboardMarkup().
-                                 add(InlineKeyboardButton(f'Удалить бронь пользователя {ret[6]}', callback_data=f'del {ret[4]}')))
+                                 add(InlineKeyboardButton(f'Удалить бронь пользователя {ret[11]}', callback_data=f'del {ret[9]}')))
     else:
         await message.answer('Броней нет', reply_markup=InlineKeyboardMarkup())
 
@@ -41,6 +44,8 @@ async def del_callback_run_admin(callback_query: types.CallbackQuery):
 
 
 async def creating_report(message: Message):
+    config = load_config(".env")
+
     font0 = xlwt.Font()
     font0.name = 'Times New Roman'
     font0.colour_index = 2
@@ -106,22 +111,19 @@ async def creating_report(message: Message):
             ws.col(first_date_cell).width = 1400
             ws.write(1, first_date_cell, hour, style1)
             first_date_cell += 1
-
-    read = await sqlite_db.sql_read_all_for_report(list(dict_date_cells)[0])
+    # todo разделить дату на день недели и день месяца чтобы сортировка норм проходила по дате для отчета
+    read = await sqlite_db.sql_read_all_for_report(list(dict_date_cells)[0].split(', ')[1])
     if read:
         first_equipment_cell = 2
         for ret in read:
-            ws.write(first_equipment_cell, 0, ret[4], style1)
-            ws.write(first_equipment_cell, 1, ret[6], style1)
-            ws.write(first_equipment_cell, 2, ret[7], style1)
-            for equipment in kb_equipment['keyboard']:
-                ws.write(first_equipment_cell, 3, equipment[0]['text'], style1)
-                if equipment[0]['text'] == 'sup-доска':
-                    ws.write(first_equipment_cell, dict_date_cells[ret[2]] + dict_hour_cells[ret[3]], ret[1].split("|")[0], style)
-                if equipment[0]['text'] == 'байдарка':
-                    ws.write(first_equipment_cell, dict_date_cells[ret[2]] + dict_hour_cells[ret[3]], ret[1].split("|")[1], style)
-                if equipment[0]['text'] == 'каноэ':
-                    ws.write(first_equipment_cell, dict_date_cells[ret[2]] + dict_hour_cells[ret[3]], ret[1].split("|")[2], style)
+            ws.write(first_equipment_cell, 0, ret[9], style1)
+            ws.write(first_equipment_cell, 1, ret[11], style1)
+            ws.write(first_equipment_cell, 2, ret[12], style1)
+            list_equipments = list(config.equipments.equipment.keys())
+            for equipment in list_equipments:
+                ws.write(first_equipment_cell, 3, equipment, style1)
+                ws.write(first_equipment_cell, dict_date_cells[ret[13] + ', ' + ret[7]] + dict_hour_cells[ret[8]],
+                         ret[list_equipments.index(equipment)], style)
                 first_equipment_cell += 1
     else:
         await message.answer('Броней нет', reply_markup=InlineKeyboardMarkup())

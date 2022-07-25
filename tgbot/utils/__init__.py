@@ -1,0 +1,1 @@
+from tgbot.utils import set_bot_commands
