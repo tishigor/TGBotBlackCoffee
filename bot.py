@@ -13,17 +13,16 @@ from tgbot.handlers.echo import register_echo
 from tgbot.handlers.user import register_user
 from tgbot.utils.notify_admins import on_startup_notify
 # from tgbot.middlewares.db import DbMiddleware
+from tgbot.middlewares.environment import EnvironmentMiddleware
 from tgbot.utils.set_bot_commands import set_default_commands
 from tgbot.data_base import sqlite_db
-
-# from create_bot import dp, bot
 
 logger = logging.getLogger(__name__)
 
 
-# def register_all_middlewares(dp):
-#     dp.setup_middleware(DbMiddleware())
-
+def register_all_middlewares(dp, config):
+    # dp.setup_middleware(DbMiddleware())
+    dp.setup_middleware(EnvironmentMiddleware(config=config))
 
 def register_all_filters(dp):
     dp.filters_factory.bind(AdminFilter)
@@ -62,6 +61,8 @@ async def main():
 
     # start
     try:
+        # пропускаем все накопленные входящие
+        await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling()
     finally:
         await dp.storage.close()

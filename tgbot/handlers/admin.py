@@ -6,10 +6,10 @@ from tgbot.config import load_config
 from tgbot.data_base import sqlite_db
 
 from tgbot.handlers.user import get_str_equipments
-from tgbot.keyboards import kb_dates, kb_hours
 
 import xlwt
 
+from tgbot.keyboards.reply import dates, hours
 
 
 async def admin_start(message: Message, state: FSMContext):
@@ -27,8 +27,8 @@ async def admin_booking(message: Message):
             await message.answer(f'{ret[11]}\n'
                                  f'Юзернейм: @{ret[10]}\n'
                                  f'Телефон: {ret[12]}\n'
-                                 f'Дата: {ret[8]}\n'
-                                 f'Время: {ret[9]}\n'
+                                 f'Дата: {ret[7]}\n'
+                                 f'Время: {ret[8]}\n'
                                  f'Оборудование:\n'
                                  f'{str_equipments}'
                                  )
@@ -44,6 +44,9 @@ async def del_callback_run_admin(callback_query: types.CallbackQuery):
 
 
 async def creating_report(message: Message):
+    kb_dates = await dates()
+    kb_hours = await hours()
+
     config = load_config(".env")
 
     font0 = xlwt.Font()

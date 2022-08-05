@@ -4,11 +4,11 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, I
 
 from tgbot.config import load_config
 
-from tgbot.keyboards.reply import quantity_equipment, equipment
+from tgbot.keyboards.reply import quantity_equipment, equipment, dates, hours
 
 from tgbot.states.OrderBooking import OrderBooking
 # todo импортнуть как в 6 строке
-from tgbot.keyboards import kb_yes_no, kb_dates, kb_hours
+from tgbot.keyboards import kb_yes_no
 from tgbot.data_base import sqlite_db
 from tgbot.config import load_config
 
@@ -98,6 +98,7 @@ async def start_value_chosen(message: Message, state: FSMContext):
                 reply_markup=kb_yes_no)
             return
         await OrderBooking.next()
+        kb_dates = await dates()
         await message.answer("Выберите дату:", reply_markup=kb_dates)
     elif message.text.lower() == 'нет':
         await message.reply("Может быть в следующий раз...", reply_markup=types.ReplyKeyboardRemove())
@@ -109,6 +110,7 @@ async def start_value_chosen(message: Message, state: FSMContext):
 
 
 async def end_of_date(message: Message, state: FSMContext):
+    kb_dates = await dates()
     if not BOOKING.have:
         # конструкция для получения значений кнопок
         ValueKB_dates = []
@@ -117,8 +119,11 @@ async def end_of_date(message: Message, state: FSMContext):
         if message.text not in ValueKB_dates:
             await message.answer("Пожалуйста, выберите дату, используя клавиатуру ниже.")
             return
-        await state.update_data(weekday=message.text.split(', ')[0], date=message.text.split(', ')[1])
+        await state.update_data(weekday=message.text.split(', ')[0], date=message.text.split(', ')[1], index_date=ValueKB_dates.index(message.text))
         await OrderBooking.next()
+        user_data = await state.get_data()
+        kb_hours = await hours(user_data['index_date'])
+
         await message.answer("Выберите время бронирования", reply_markup=kb_hours)
     elif BOOKING.have:
         # конструкция для получения значений кнопок
@@ -147,6 +152,7 @@ async def end_of_date(message: Message, state: FSMContext):
 
 async def end_of_hour(message: Message, state: FSMContext):
     # конструкция для получения значений кнопок
+    kb_hours = await hours()
     ValueKB_hours = []
     for button in kb_hours.keyboard:
         ValueKB_hours.append(button[0])
@@ -154,7 +160,7 @@ async def end_of_hour(message: Message, state: FSMContext):
         await message.answer("Пожалуйста, выберите время, используя клавиатуру ниже.")
         return
     user_data = await state.get_data()
-    kb_equipment = await equipment(user_data['date'])
+    kb_equipment = await equipment(user_data['weekday'])
     await state.update_data(hour=message.text.lower())
     await OrderBooking.next()
     await message.answer(f"Выбери оборудование", reply_markup=kb_equipment)
@@ -177,6 +183,7 @@ async def boat_chosen(message: Message, state: FSMContext):
     user_data = await state.get_data()
     kb_quantity_equipment = await quantity_equipment(user_data['date'], user_data['hour'], user_data['boat'])
     if not kb_quantity_equipment.keyboard:
+        kb_hours = await hours()
         await message.answer("На это время нет доступного оборудования, попробуйте выбрать другое время", reply_markup=kb_hours)
         await OrderBooking.waiting_for_hour.set()
     else:
@@ -189,7 +196,6 @@ async def end_of_booking(message: Message, state: FSMContext):
     kb_quantity_equipment = await quantity_equipment(user_data['date'], user_data['hour'], user_data['boat'])
     ValueKB_quantity_equipment = []
     for button in kb_quantity_equipment.keyboard:
-        print(button)
         ValueKB_quantity_equipment.append(button[0])
     if message.text.lower() not in ValueKB_quantity_equipment:
         await message.answer("Пожалуйста, выберите количество оборудования, используя клавиатуру ниже.")

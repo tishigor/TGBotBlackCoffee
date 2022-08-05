@@ -18,7 +18,7 @@ class DbConfig:
 @dataclass
 class TgBot:
     token: str
-    admin_ids: list[int] # for Python version >= 3.9
+    admin_ids: list[int]  # for Python version >= 3.9
     # admin_ids: list # for Python version < 3.9 write "List(int)"
     # use_redis: bool
 
@@ -27,7 +27,7 @@ class TgBot:
 class EquipmentsConfig:
     equipment: dict
     equipment_db: list[str]
-    # quantity: list[int]
+    quantity_for_user: list[int]
 
 
 @dataclass
@@ -56,5 +56,6 @@ def load_config(path: str = None):
         equipments=EquipmentsConfig(
             equipment=dict(zip(env.list("EQUIPMENTS"), env.list("QUANTITY"))),
             equipment_db=list(map(str, env.list("EQUIPMENTS_DB"))),
+            quantity_for_user=dict(zip(env.list("EQUIPMENTS"), env.list("QUANTITY_FOR_BOOKING"))),
         ),
     )
